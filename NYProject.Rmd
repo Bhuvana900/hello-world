@@ -1,0 +1,259 @@
+---
+title: "NYProject"
+author: "Bhuvana"
+date: "11/15/2021"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r readLibrary, include=FALSE}
+library(tidyverse)
+library(lubridate)
+```
+
+This report is being prepared based on tha data that is retrieved from <https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD> on the NY Shooting Incident. 
+
+There are mainly information on five boroughs, namely "Queens, Bronx, Manhattan, Staten Island and Brooklyn", of New York that is collected and an analysis is being done to understand on the Perpetrators who were involved in them, in particular on the females who were involved in each borough 
+
+## Importing the Data Set
+
+Data for this Project is being retrieved from here <https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD>
+
+**Initial information that is got is as below.**
+
+```{r gettingData, echo=FALSE}
+
+#url_info<-"https://catalog.data.gov/dataset?q=NYPD+shooting+incident+data&sort=views_recent+desc&as_sfid=AAAAAAU9MOKntGz9Ix8qrvZxwhSK_AiOypSGT60rLPVoHz-8HsY1Mh4KmSj7zlqNCVO6b7dCqgGwhPkf-Qnc2y9lHh6jlCqzqatt4qFA7qu7hx7tTV9ZA0dpYRjury_c1-48JzQ%3D&as_fid=7fd0a646e3fe3a665ea71f155c1afbe5b84b7d72&ext_location=&ext_bbox=&ext_prev_extent=-182.8125%2C-30.751277776257812%2C-18.28125%2C72.81607371878991"
+file_name<-"https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+
+read_data<-read_csv(file_name)
+read_data
+
+```
+
+**A snapshot of the data is as below.**
+
+```{r dataSummary, echo=FALSE}
+summary(read_data)
+```
+
+## Tidying the data
+Data is being tidyed by renaming the Column **BORO** to **BOROUGH** and removing the columns OCCUR_TIME, X_COORD_CD, Y_COORD_CD, Lon_Lat, Latitude, Longitude, JURISDICTION_CODE
+```{r tidyingData, echo=FALSE}
+cityName<-read_data %>% rename(BOROUGH = 'BORO') 
+
+removeLonLat <- cityName %>% select(-c(Lon_Lat, Latitude, Longitude, 
+                                        X_COORD_CD, Y_COORD_CD, JURISDICTION_CODE))
+
+removeOccurTime <- removeLonLat %>% select(-c(OCCUR_TIME))
+removeOccurTime
+
+```
+
+## Transforming the Data
+Since we are more interested in knowing about the Perpetrator's involved, data is being transformed to include only the City , PERP details and VIC details of Age, Sex and Race and STATISTICAL_MURDER_FLAG.
+```{r transform, echo=FALSE}
+groupCity<-removeOccurTime %>% group_by(BOROUGH) %>% select(BOROUGH, PERP_AGE_GROUP, PERP_SEX, PERP_RACE, STATISTICAL_MURDER_FLAG, VIC_AGE_GROUP, VIC_SEX, VIC_RACE,)
+groupCity
+
+ageGroup<-groupCity %>% group_by(PERP_AGE_GROUP, PERP_RACE) 
+
+groupCity2<-removeOccurTime %>% group_by(BOROUGH)
+
+
+```
+
+## Visualizing the Data
+
+1. In this first visualization, information about the Perpetrator's race and the Age Group's who were involved in is being looked into.
+
+```{r visualize1, echo=FALSE}
+groupCity%>% ggplot(aes(x=PERP_AGE_GROUP, y=PERP_RACE)) + 
+  geom_point(aes(color="PERP_AGE_GROUP")) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = "Perpetrator AGE-RACE Lookup", y=NULL) +
+  xlab(label = "Age Group") +
+  ylab(label = "Race")
+
+```
+
+2. In this second visualization, the information with regard to Perpetrator's race and the Borough, where they are involved in is being looked into.
+
+```{r visualize2, echo=FALSE}
+groupCity%>% ggplot(aes(x=PERP_RACE, y=BOROUGH)) +
+  geom_point(aes(color="PERP_RACE")) +
+  theme(legend.position = "bottom", axis.text.x = element_text(angle = 90)) +
+  labs(title = "Perpetrator Race to Borough Lookup", y=NULL) +
+  xlab(label = "Race") +
+  ylab(label = "Borough")
+```
+
+## Analysing the Data
+
+On analyzing the first visual data, it can be observed that the data of the age group **1020** and **940** could be invalid inputs or they may be Typo while entering the data, of which we may not be sure. Also there are values with **UNKNOWN** and **NA**, where the age group of the people is not being specified. The Race also has data of **NA** and **UNKNOWN**.
+
+From the second visual data, it can be seen that every Borough has reported data of all Race types of people being involved except for "AMERICAN INDIAN/ALASKAN NATIVE" race type, who were involved in only in Bronx and Queens Borough.
+
+A look into the data shows that the data of **NA** and **UNKNOWN** could be valid records. So is for the **1020** and **940** age group data. Therefore, they are retained as received.
+
+```{r removeInvalid, echo=FALSE} 
+statRaceUK <- groupCity %>% filter( STATISTICAL_MURDER_FLAG=="FALSE" )
+statRaceUK 
+
+statRaceUN <- groupCity %>% filter(STATISTICAL_MURDER_FLAG=="TRUE" )
+statRaceUN
+
+```
+
+Following analysis is being done further down.
+
+* Total number of people who are involved from each Borough
+* Number of people of Particular Gender type is checked
+* Number of Females involved from each Borough and the Race and Age Group they belong to is looked into.
+
+Henceforth a model is prepared on the Prediction of number of females involved on Total Count
+
+## Total Count from each Borough
+
+```{r addCount, echo=FALSE}
+
+ageGrp <- groupCity %>% count(PERP_AGE_GROUP, name = "Age_Group_Count") 
+
+SumAgeGrp <- ageGrp %>% group_by(BOROUGH) %>% summarize(Total_Count = sum(Age_Group_Count)) %>% select (BOROUGH, Total_Count)
+SumAgeGrp
+
+```
+
+## Count of Particular Gender of people from each Borough
+
+```{r addGender, echo=FALSE}
+genderGrp <- groupCity %>% count(PERP_SEX, name = "Gender") 
+genderGrp
+
+```
+
+## Count of Particular Race of people from each Borough
+
+```{r addRace, echo=FALSE}
+raceGrp <- groupCity %>% count(PERP_RACE, name = "Race") 
+raceGrp
+
+```
+
+## Count of Females Involved from each Borough 
+
+```{r addFemale, echo=FALSE}
+femaleGrp <- genderGrp %>% filter(PERP_SEX == "F")
+femaleGrp
+
+femaleGenderJoin <- SumAgeGrp %>% full_join(femaleGrp)
+femaleGenderJoin
+
+```
+
+## Count on Females involved with regard to their Race and Age Group
+
+```{r femaleData, echo=FALSE}
+raceGrpF <- groupCity %>% filter(PERP_SEX == "F") %>% count(PERP_RACE, name = "Race") 
+raceGrpF
+
+raceGrpFAge <- groupCity %>% filter(PERP_SEX == "F") %>% count(PERP_AGE_GROUP, name = "Group") 
+raceGrpFAge
+
+```
+
+## Count on Females involved specific to each Borough with regard to Race and Age Group
+
+```{r femaleDataBorough, echo=FALSE}
+raceGrpFR <- raceGrpF %>% filter (BOROUGH == "BRONX")
+raceGrpFR
+
+raceGrpFR2 <- raceGrpF %>% filter (BOROUGH == "QUEENS")
+raceGrpFR2
+
+raceGrpFR3 <- raceGrpF %>% filter (BOROUGH == "MANHATTAN")
+raceGrpFR3
+
+raceGrpFR4 <- raceGrpF %>% filter (BOROUGH == "STATEN ISLAND")
+raceGrpFR4
+
+raceGrpFR5 <- raceGrpF %>% filter (BOROUGH == "BROOKLYN")
+raceGrpFR5
+
+raceGrpFAgeF <- raceGrpFAge %>% filter (BOROUGH == "BRONX")
+raceGrpFAgeF
+
+raceGrpFAgeF2 <- raceGrpFAge %>% filter (BOROUGH == "QUEENS")
+raceGrpFAgeF2
+
+raceGrpFAgeF3 <- raceGrpFAge %>% filter (BOROUGH == "MANHATTAN")
+raceGrpFAgeF3
+
+raceGrpFAgeF4 <- raceGrpFAge %>% filter (BOROUGH == "STATEN ISLAND")
+raceGrpFAgeF4
+
+raceGrpFAgeF5 <- raceGrpFAge %>% filter (BOROUGH == "BROOKLYN")
+raceGrpFAgeF5
+```
+
+It can be interpreted that the Female Perpetrators belonging to the race of Black and White Hispanic are mostly involved and people of Age Group's 18-24 and 25-44, in short, 18-45 age group people are responsible for the acts.
+
+Although other race types of people too account in the Borough's, their numbers are comparatively less. The issue on race and their impact is a sensitive topic, but still it raises a few questions.
+
+* Why are particular type of people responsible
+* What measures could be taken to mitigate their adverse impact
+* Is there any specific reasons for their act
+
+Age group's between 18-24 and 24-45 also would be raising the same questions.
+
+
+## Modelling the Data
+
+A model is being predicted on females involved with regard to total counts.
+
+```{r femaleModel, echo=FALSE}
+mod <- lm(Gender ~ Total_Count, data = femaleGenderJoin)
+summary(mod)
+
+femaleGenderJoinWtPred <- femaleGenderJoin %>% mutate(pred = predict(mod))
+femaleGenderJoinWtPred
+
+
+femaleGenderJoinWtPred %>% ggplot() +
+  geom_point(aes(x=Total_Count, y=Gender), color = "blue") +
+  geom_point(aes(x=Total_Count, y=pred), color = "red") +
+  labs(title = "Females involved with respect to Total Counts", y=NULL)
+
+```
+
+It can be observed that the predictive values in red is in line with the actual values in blue that we have for each borough of the perpetrators impact.
+
+## Conclusion
+
+From the analysis that is being done above on the Female Perpetrators, it can be seen that the Borough of Brooklyn is being affected highly. Staten Island looks to be far less in number compared to the other Borough's. Though there are different race types of people who were associated and people of different age groups, it is particular race types who are engaged in them, so is a specific age group people. 
+
+There were a couple of factors that went into in the Initial Analysis, 
+
+While preparing the report, possible source of bias that was there was to identify 
+
+* the group of people who were affected
+* the borough that is least affected overall
+
+This was thought to understand on the borough of New york, if moving over there.
+
+Then opted to look out for other options that provided a little general specific insight 
+
+* on a particular gender who have committed
+
+The questions that have come out from this analysis are :
+
+* would the data on other gender types also be similar
+* are the same age group people related, to account for in particular borough's
+
+This report generation has helped me to understand the details on female perpetrators involved in NY. 
